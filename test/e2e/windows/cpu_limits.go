@@ -45,8 +45,8 @@ var _ = SIGDescribe("[Feature:Windows] Cpu Resources [Serial]", func() {
 			ginkgo.By("Creating one pod with limit set to '500m'")
 			podsMilli := newCPUBurnPods(1, powershellImage, "500m", "1Gi")
 			f.PodClient().CreateBatch(podsMilli)
-			ginkgo.By("Waiting 2 minutes")
-			time.Sleep(2 * time.Minute)
+			ginkgo.By("Waiting 4 minutes")
+			time.Sleep(4 * time.Minute)
 			ginkgo.By("Ensuring pods are still running")
 			var allPods [](*v1.Pod)
 			for _, p := range podsDecimal {

@@ -50,7 +50,7 @@ var _ = SIGDescribe("[Feature:Windows] Kubelet-Stats [Serial]", func() {
 
 				ginkgo.By("Scheduling 10 pods")
 				powershellImage := imageutils.GetConfig(imageutils.BusyBox)
-				pods := newKubeletStatsTestPods(10, powershellImage, targetNode.Name)
+				pods := newKubeletStatsTestPods(2, powershellImage, targetNode.Name)
 				f.PodClient().CreateBatch(pods)
 
 				ginkgo.By("Waiting up to 3 minutes for pods to be running")
