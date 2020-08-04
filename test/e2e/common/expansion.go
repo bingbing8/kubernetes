@@ -18,7 +18,6 @@ package common
 
 import (
 	"fmt"
-	"time"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -369,10 +368,11 @@ func testPodFailSubpath(f *framework.Framework, pod *v1.Pod) {
 	//	e2epod.DeletePodWithWait(f.ClientSet, pod)
 	//}()
 
-	timeout := 3 * time.Minute
-	err := e2epod.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, timeout)
+	err := e2epod.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, framework.PodStartShortTimeout)
 	if err != nil {
-		fmt.Println(err, "err is not nil; print it")
+		fmt.Println(err)
+	} else {
+		framework.Failf("did not receive expected error")
 	}
 	framework.ExpectError(err, "while waiting for pod to be running")
 }
