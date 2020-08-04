@@ -367,7 +367,11 @@ func testPodFailSubpath(f *framework.Framework, pod *v1.Pod) {
 	//	e2epod.DeletePodWithWait(f.ClientSet, pod)
 	//}()
 
-	err := e2epod.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, framework.PodStartShortTimeout)
+	timeout := 3 * time.Minute
+	err := e2epod.WaitTimeoutForPodRunningInNamespace(f.ClientSet, pod.Name, pod.Namespace, timeout)
+	if err != nil {
+		fmt.Println(err, "err is not nil; print it")
+	}
 	framework.ExpectError(err, "while waiting for pod to be running")
 }
 
