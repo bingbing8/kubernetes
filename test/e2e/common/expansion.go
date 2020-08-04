@@ -186,7 +186,7 @@ var _ = framework.KubeDescribe("Variable Expansion", func() {
 		envVars := []v1.EnvVar{
 			{
 				Name:  "POD_NAME",
-				Value: "/tmp",
+				Value: "c:\\k",
 			},
 		}
 		mounts := []v1.VolumeMount{
