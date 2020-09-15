@@ -38,7 +38,6 @@ go_library(
         "//pkg/apis/policy/install:go_default_library",
         "//pkg/apis/rbac/install:go_default_library",
         "//pkg/apis/scheduling/install:go_default_library",
-        "//pkg/apis/settings/install:go_default_library",
         "//pkg/apis/storage/install:go_default_library",
         "//pkg/cloudprovider/providers:go_default_library",
         "//pkg/controller:go_default_library",
@@ -87,8 +86,8 @@ go_library(
         "//pkg/serviceaccount:go_default_library",
         "//pkg/volume:go_default_library",
         "//pkg/volume/awsebs:go_default_library",
-        "//pkg/volume/azure_dd:go_default_library",
         "//pkg/volume/azure_file:go_default_library",
+        "//pkg/volume/azuredd:go_default_library",
         "//pkg/volume/cinder:go_default_library",
         "//pkg/volume/csi:go_default_library",
         "//pkg/volume/csimigration:go_default_library",
@@ -160,9 +159,13 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["core_test.go"],
+    srcs = [
+        "certificates_test.go",
+        "core_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
+        "//pkg/controller/certificates/signer/config:go_default_library",
         "//staging/src/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//staging/src/k8s.io/client-go/discovery:go_default_library",
         "//staging/src/k8s.io/client-go/discovery/fake:go_default_library",

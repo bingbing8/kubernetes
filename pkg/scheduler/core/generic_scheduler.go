@@ -30,7 +30,6 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	extenderv1 "k8s.io/kube-scheduler/extender/v1"
@@ -121,7 +120,6 @@ type genericScheduler struct {
 	extenders                []framework.Extender
 	nodeInfoSnapshot         *internalcache.Snapshot
 	pvcLister                corelisters.PersistentVolumeClaimLister
-	disablePreemption        bool
 	percentageOfNodesToScore int32
 	nextStartNodeIndex       int
 }
@@ -137,7 +135,7 @@ func (g *genericScheduler) snapshot() error {
 // If it succeeds, it will return the name of the node.
 // If it fails, it will return a FitError error with reasons.
 func (g *genericScheduler) Schedule(ctx context.Context, prof *profile.Profile, state *framework.CycleState, pod *v1.Pod) (result ScheduleResult, err error) {
-	ctx, trace := genericapirequest.WithTrace(ctx, "Scheduling", utiltrace.Field{Key: "namespace", Value: pod.Namespace}, utiltrace.Field{Key: "name", Value: pod.Name})
+	trace := utiltrace.New("Scheduling", utiltrace.Field{Key: "namespace", Value: pod.Namespace}, utiltrace.Field{Key: "name", Value: pod.Name})
 	defer trace.LogIfLong(100 * time.Millisecond)
 
 	if err := podPassesBasicChecks(pod, g.pvcLister); err != nil {
@@ -334,11 +332,11 @@ func (g *genericScheduler) findNodesThatPassFilters(ctx context.Context, prof *p
 				feasibleNodes[length-1] = nodeInfo.Node()
 			}
 		} else {
-			statusesLock.Lock()
 			if !status.IsSuccess() {
+				statusesLock.Lock()
 				statuses[nodeInfo.Node().Name] = status
+				statusesLock.Unlock()
 			}
-			statusesLock.Unlock()
 		}
 	}
 
@@ -631,14 +629,12 @@ func NewGenericScheduler(
 	nodeInfoSnapshot *internalcache.Snapshot,
 	extenders []framework.Extender,
 	pvcLister corelisters.PersistentVolumeClaimLister,
-	disablePreemption bool,
 	percentageOfNodesToScore int32) ScheduleAlgorithm {
 	return &genericScheduler{
 		cache:                    cache,
 		extenders:                extenders,
 		nodeInfoSnapshot:         nodeInfoSnapshot,
 		pvcLister:                pvcLister,
-		disablePreemption:        disablePreemption,
 		percentageOfNodesToScore: percentageOfNodesToScore,
 	}
 }

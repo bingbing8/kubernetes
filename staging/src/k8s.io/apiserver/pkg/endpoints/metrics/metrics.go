@@ -122,7 +122,7 @@ var (
 			Help:           "Number of requests dropped with 'Try again later' response",
 			StabilityLevel: compbasemetrics.ALPHA,
 		},
-		[]string{"requestKind"},
+		[]string{"request_kind"},
 	)
 	// TLSHandshakeErrors is a number of requests dropped with 'TLS handshake error from' error
 	TLSHandshakeErrors = compbasemetrics.NewCounter(
@@ -166,7 +166,15 @@ var (
 			Help:           "Maximal number of currently used inflight request limit of this apiserver per request kind in last second.",
 			StabilityLevel: compbasemetrics.ALPHA,
 		},
-		[]string{"requestKind"},
+		[]string{"request_kind"},
+	)
+	currentInqueueRequests = compbasemetrics.NewGaugeVec(
+		&compbasemetrics.GaugeOpts{
+			Name:           "apiserver_current_inqueue_requests",
+			Help:           "Maximal number of queued requests in this apiserver per request kind in last second.",
+			StabilityLevel: compbasemetrics.ALPHA,
+		},
+		[]string{"request_kind"},
 	)
 
 	requestTerminationsTotal = compbasemetrics.NewCounterVec(
@@ -191,6 +199,7 @@ var (
 		WatchEvents,
 		WatchEventsSizes,
 		currentInflightRequests,
+		currentInqueueRequests,
 		requestTerminationsTotal,
 	}
 
@@ -231,6 +240,11 @@ const (
 	ReadOnlyKind = "readOnly"
 	// MutatingKind is a string identifying mutating request kind
 	MutatingKind = "mutating"
+
+	// WaitingPhase is the phase value for a request waiting in a queue
+	WaitingPhase = "waiting"
+	// ExecutingPhase is the phase value for an executing request
+	ExecutingPhase = "executing"
 )
 
 const (
@@ -261,9 +275,19 @@ func Reset() {
 	}
 }
 
-func UpdateInflightRequestMetrics(nonmutating, mutating int) {
-	currentInflightRequests.WithLabelValues(ReadOnlyKind).Set(float64(nonmutating))
-	currentInflightRequests.WithLabelValues(MutatingKind).Set(float64(mutating))
+// UpdateInflightRequestMetrics reports concurrency metrics classified by
+// mutating vs Readonly.
+func UpdateInflightRequestMetrics(phase string, nonmutating, mutating int) {
+	for _, kc := range []struct {
+		kind  string
+		count int
+	}{{ReadOnlyKind, nonmutating}, {MutatingKind, mutating}} {
+		if phase == ExecutingPhase {
+			currentInflightRequests.WithLabelValues(kc.kind).Set(float64(kc.count))
+		} else {
+			currentInqueueRequests.WithLabelValues(kc.kind).Set(float64(kc.count))
+		}
+	}
 }
 
 // RecordRequestTermination records that the request was terminated early as part of a resource
@@ -275,20 +299,17 @@ func RecordRequestTermination(req *http.Request, requestInfo *request.RequestInf
 		requestInfo = &request.RequestInfo{Verb: req.Method, Path: req.URL.Path}
 	}
 	scope := CleanScope(requestInfo)
-	// We don't use verb from <requestInfo>, as for the healthy path
-	// MonitorRequest is called from InstrumentRouteFunc which is registered
-	// in installer.go with predefined list of verbs (different than those
-	// translated to RequestInfo).
+
+	// We don't use verb from <requestInfo>, as this may be propagated from
+	// InstrumentRouteFunc which is registered in installer.go with predefined
+	// list of verbs (different than those translated to RequestInfo).
 	// However, we need to tweak it e.g. to differentiate GET from LIST.
-	verb := canonicalVerb(strings.ToUpper(req.Method), scope)
-	// set verbs to a bounded set of known and expected verbs
-	if !validRequestMethods.Has(verb) {
-		verb = OtherRequestMethod
-	}
+	reportedVerb := cleanVerb(canonicalVerb(strings.ToUpper(req.Method), scope), req)
+
 	if requestInfo.IsResourceRequest {
-		requestTerminationsTotal.WithLabelValues(cleanVerb(verb, req), requestInfo.APIGroup, requestInfo.APIVersion, requestInfo.Resource, requestInfo.Subresource, scope, component, codeToString(code)).Inc()
+		requestTerminationsTotal.WithLabelValues(reportedVerb, requestInfo.APIGroup, requestInfo.APIVersion, requestInfo.Resource, requestInfo.Subresource, scope, component, codeToString(code)).Inc()
 	} else {
-		requestTerminationsTotal.WithLabelValues(cleanVerb(verb, req), "", "", "", requestInfo.Path, scope, component, codeToString(code)).Inc()
+		requestTerminationsTotal.WithLabelValues(reportedVerb, "", "", "", requestInfo.Path, scope, component, codeToString(code)).Inc()
 	}
 }
 
@@ -300,12 +321,13 @@ func RecordLongRunning(req *http.Request, requestInfo *request.RequestInfo, comp
 	}
 	var g compbasemetrics.GaugeMetric
 	scope := CleanScope(requestInfo)
-	// We don't use verb from <requestInfo>, as for the healthy path
-	// MonitorRequest is called from InstrumentRouteFunc which is registered
-	// in installer.go with predefined list of verbs (different than those
-	// translated to RequestInfo).
+
+	// We don't use verb from <requestInfo>, as this may be propagated from
+	// InstrumentRouteFunc which is registered in installer.go with predefined
+	// list of verbs (different than those translated to RequestInfo).
 	// However, we need to tweak it e.g. to differentiate GET from LIST.
 	reportedVerb := cleanVerb(canonicalVerb(strings.ToUpper(req.Method), scope), req)
+
 	if requestInfo.IsResourceRequest {
 		g = longRunningRequestGauge.WithLabelValues(reportedVerb, requestInfo.APIGroup, requestInfo.APIVersion, requestInfo.Resource, requestInfo.Subresource, scope, component)
 	} else {
@@ -319,7 +341,12 @@ func RecordLongRunning(req *http.Request, requestInfo *request.RequestInfo, comp
 // MonitorRequest handles standard transformations for client and the reported verb and then invokes Monitor to record
 // a request. verb must be uppercase to be backwards compatible with existing monitoring tooling.
 func MonitorRequest(req *http.Request, verb, group, version, resource, subresource, scope, component string, deprecated bool, removedRelease string, contentType string, httpCode, respSize int, elapsed time.Duration) {
-	reportedVerb := cleanVerb(verb, req)
+	// We don't use verb from <requestInfo>, as this may be propagated from
+	// InstrumentRouteFunc which is registered in installer.go with predefined
+	// list of verbs (different than those translated to RequestInfo).
+	// However, we need to tweak it e.g. to differentiate GET from LIST.
+	reportedVerb := cleanVerb(canonicalVerb(strings.ToUpper(req.Method), scope), req)
+
 	dryRun := cleanDryRun(req.URL)
 	elapsedSeconds := elapsed.Seconds()
 	cleanContentType := cleanContentType(contentType)
@@ -416,7 +443,7 @@ func CleanScope(requestInfo *request.RequestInfo) string {
 func canonicalVerb(verb string, scope string) string {
 	switch verb {
 	case "GET", "HEAD":
-		if scope != "resource" {
+		if scope != "resource" && scope != "" {
 			return "LIST"
 		}
 		return "GET"

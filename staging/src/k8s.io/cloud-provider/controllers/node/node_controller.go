@@ -108,7 +108,9 @@ func NewCloudNodeController(
 	klog.Infof("Sending events to api server.")
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 
-	if _, ok := cloud.Instances(); !ok {
+	_, instancesSupported := cloud.Instances()
+	_, instancesV2Supported := cloud.InstancesV2()
+	if !instancesSupported && !instancesV2Supported {
 		return nil, errors.New("cloud provider does not support instances")
 	}
 
@@ -225,7 +227,7 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 
 	instanceMetadataGetter := func(providerID string, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
 		if instancesV2, ok := cnc.cloud.InstancesV2(); instancesV2 != nil && ok {
-			return instancesV2.InstanceMetadataByProviderID(ctx, providerID)
+			return instancesV2.InstanceMetadata(ctx, node)
 		}
 
 		// If InstancesV2 not implement, use Instances.
@@ -435,9 +437,9 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		providerID = node.Spec.ProviderID
 	}
 
-	instanceMetadataGetter := func(providerID string, nodeName string) (*cloudprovider.InstanceMetadata, error) {
+	instanceMetadataGetter := func(providerID string, nodeName string, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
 		if instancesV2, ok := cnc.cloud.InstancesV2(); instancesV2 != nil && ok {
-			return instancesV2.InstanceMetadataByProviderID(ctx, providerID)
+			return instancesV2.InstanceMetadata(ctx, node)
 		}
 
 		// If InstancesV2 not implement, use Instances.
@@ -445,21 +447,44 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		if !ok {
 			return nil, fmt.Errorf("failed to get instances from cloud provider")
 		}
+
 		nodeAddresses, err := getNodeAddressesByProviderIDOrName(ctx, instances, providerID, nodeName)
 		if err != nil {
 			return nil, err
 		}
+
 		instanceType, err := getInstanceTypeByProviderIDOrName(ctx, instances, providerID, nodeName)
 		if err != nil {
 			return nil, err
 		}
-		return &cloudprovider.InstanceMetadata{
-			Type:          instanceType,
+
+		instanceMetadata := &cloudprovider.InstanceMetadata{
+			InstanceType:  instanceType,
 			NodeAddresses: nodeAddresses,
-		}, nil
+		}
+
+		zones, ok := cnc.cloud.Zones()
+		if !ok {
+			return instanceMetadata, nil
+		}
+
+		zone, err := getZoneByProviderIDOrName(ctx, zones, providerID, node.Name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get zone from cloud provider: %v", err)
+		}
+
+		if zone.FailureDomain != "" {
+			instanceMetadata.Zone = zone.FailureDomain
+		}
+
+		if zone.Region != "" {
+			instanceMetadata.Region = zone.Region
+		}
+
+		return instanceMetadata, nil
 	}
 
-	instanceMeta, err := instanceMetadataGetter(providerID, node.Name)
+	instanceMeta, err := instanceMetadataGetter(providerID, node.Name, node)
 	if err != nil {
 		return nil, err
 	}
@@ -470,46 +495,41 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		return nil, errors.New("failed to find kubelet node IP from cloud provider")
 	}
 
-	if instanceMeta.Type != "" {
-		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelInstanceType, instanceMeta.Type)
-		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelInstanceTypeStable, instanceMeta.Type)
+	if instanceMeta.InstanceType != "" {
+		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelInstanceType, instanceMeta.InstanceType)
+		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelInstanceTypeStable, instanceMeta.InstanceType)
 		nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
 			if n.Labels == nil {
 				n.Labels = map[string]string{}
 			}
-			n.Labels[v1.LabelInstanceType] = instanceMeta.Type
-			n.Labels[v1.LabelInstanceTypeStable] = instanceMeta.Type
+			n.Labels[v1.LabelInstanceType] = instanceMeta.InstanceType
+			n.Labels[v1.LabelInstanceTypeStable] = instanceMeta.InstanceType
 		})
 	}
 
-	if zones, ok := cnc.cloud.Zones(); ok {
-		zone, err := getZoneByProviderIDOrName(ctx, zones, providerID, node.Name)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get zone from cloud provider: %v", err)
-		}
-		if zone.FailureDomain != "" {
-			klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneFailureDomain, zone.FailureDomain)
-			klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneFailureDomainStable, zone.FailureDomain)
-			nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
-				if n.Labels == nil {
-					n.Labels = map[string]string{}
-				}
-				n.Labels[v1.LabelZoneFailureDomain] = zone.FailureDomain
-				n.Labels[v1.LabelZoneFailureDomainStable] = zone.FailureDomain
-			})
-		}
-		if zone.Region != "" {
-			klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneRegion, zone.Region)
-			klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneRegionStable, zone.Region)
-			nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
-				if n.Labels == nil {
-					n.Labels = map[string]string{}
-				}
-				n.Labels[v1.LabelZoneRegion] = zone.Region
-				n.Labels[v1.LabelZoneRegionStable] = zone.Region
-			})
-		}
+	if instanceMeta.Zone != "" {
+		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneFailureDomain, instanceMeta.Zone)
+		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneFailureDomainStable, instanceMeta.Zone)
+		nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
+			if n.Labels == nil {
+				n.Labels = map[string]string{}
+			}
+			n.Labels[v1.LabelZoneFailureDomain] = instanceMeta.Zone
+			n.Labels[v1.LabelZoneFailureDomainStable] = instanceMeta.Zone
+		})
 	}
+	if instanceMeta.Region != "" {
+		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneRegion, instanceMeta.Region)
+		klog.V(2).Infof("Adding node label from cloud provider: %s=%s", v1.LabelZoneRegionStable, instanceMeta.Region)
+		nodeModifiers = append(nodeModifiers, func(n *v1.Node) {
+			if n.Labels == nil {
+				n.Labels = map[string]string{}
+			}
+			n.Labels[v1.LabelZoneRegion] = instanceMeta.Region
+			n.Labels[v1.LabelZoneRegionStable] = instanceMeta.Region
+		})
+	}
+
 	return nodeModifiers, nil
 }
 

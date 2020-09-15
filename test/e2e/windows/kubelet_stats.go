@@ -48,14 +48,14 @@ var _ = SIGDescribe("[Feature:Windows] Kubelet-Stats [Serial]", func() {
 				framework.ExpectNoError(err, "Error finding Windows node")
 				framework.Logf("Using node: %v", targetNode.Name)
 
-				ginkgo.By("Scheduling 6 pods")
+				ginkgo.By("Scheduling 10 pods")
 				powershellImage := imageutils.GetConfig(imageutils.BusyBox)
-				pods := newKubeletStatsTestPods(6, powershellImage, targetNode.Name)
+				pods := newKubeletStatsTestPods(10, powershellImage, targetNode.Name)
 				f.PodClient().CreateBatch(pods)
 
 				ginkgo.By("Waiting up to 3 minutes for pods to be running")
 				timeout := 3 * time.Minute
-				e2epod.WaitForPodsRunningReady(f.ClientSet, f.Namespace.Name, 6, 0, timeout, make(map[string]string))
+				e2epod.WaitForPodsRunningReady(f.ClientSet, f.Namespace.Name, 10, 0, timeout, make(map[string]string))
 
 				ginkgo.By("Getting kubelet stats 5 times and checking average duration")
 				iterations := 5
@@ -80,7 +80,7 @@ var _ = SIGDescribe("[Feature:Windows] Kubelet-Stats [Serial]", func() {
 						framework.ExpectEqual(*podStats.CPU.UsageCoreNanoSeconds > 0, true, "Pod stats should not report 0 cpu usage")
 						framework.ExpectEqual(*podStats.Memory.WorkingSetBytes > 0, true, "Pod stats should not report 0 bytes for memory working set ")
 					}
-					framework.ExpectEqual(statsChecked, 6, "Should find stats for 6 pods in kubelet stats")
+					framework.ExpectEqual(statsChecked, 10, "Should find stats for 6 pods in kubelet stats")
 
 					time.Sleep(5 * time.Second)
 				}
@@ -158,7 +158,9 @@ func newKubeletStatsTestPods(numPods int, image imageutils.Config, nodeName stri
 						},
 					},
 				},
-				NodeName: nodeName,
+				NodeSelector: map[string]string{
+					"kubernetes.io/os": "windows",
+				},
 			},
 		}
 

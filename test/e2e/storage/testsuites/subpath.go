@@ -686,8 +686,14 @@ func setWriteCommand(file string, container *v1.Container) {
 	container.Args = []string{
 		"mounttest",
 		fmt.Sprintf("--new_file_0644=%v", file),
-		fmt.Sprintf("--file_mode=%v", file),
 	}
+	// See issue https://github.com/kubernetes/kubernetes/issues/94237 about file_mode
+	// not working well on Windows
+	// TODO: remove this check after issue is resolved
+	if !framework.NodeOSDistroIs("windows") {
+		container.Args = append(container.Args, fmt.Sprintf("--file_mode=%v", file))
+	}
+
 }
 
 func addSubpathVolumeContainer(container *v1.Container, volumeMount v1.VolumeMount) {
@@ -1059,6 +1065,9 @@ func formatVolume(f *framework.Framework, pod *v1.Pod) {
 }
 
 func podContainerExec(pod *v1.Pod, containerIndex int, command string) (string, error) {
+	if containerIndex > len(pod.Spec.Containers)-1 {
+		return "", fmt.Errorf("container not found in pod: index %d", containerIndex)
+	}
 	var shell string
 	var option string
 	if framework.NodeOSDistroIs("windows") {
