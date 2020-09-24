@@ -68,6 +68,7 @@ var _ = SIGDescribe("[Feature:HPA] Horizontal pod autoscaling (scale resource: C
 
 	SIGDescribe("ReplicationController light", func() {
 		ginkgo.It("Should scale from 1 pod to 2 pods", func() {
+			stasis = 10 * time.Minute
 			scaleTest := &HPAScaleTest{
 				initPods:                    1,
 				totalInitialCPUUsage:        150,
@@ -76,6 +77,7 @@ var _ = SIGDescribe("[Feature:HPA] Horizontal pod autoscaling (scale resource: C
 				minPods:                     1,
 				maxPods:                     2,
 				firstScale:                  2,
+				firstScaleStasis:            stasis
 			}
 			scaleTest.run("rc-light", e2eautoscaling.KindRC, rc, f)
 		})
