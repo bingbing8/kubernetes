@@ -72,7 +72,7 @@ var _ = SIGDescribe("[Feature:HPA] Horizontal pod autoscaling (scale resource: C
 				initPods:                    1,
 				totalInitialCPUUsage:        150,
 				perPodCPURequest:            200,
-				targetCPUUtilizationPercent: 50,
+				targetCPUUtilizationPercent: 40,
 				minPods:                     1,
 				maxPods:                     2,
 				firstScale:                  2,
@@ -118,12 +118,13 @@ func (scaleTest *HPAScaleTest) run(name string, kind schema.GroupVersionKind, rc
 	const timeToWait = 15 * time.Minute
 	rc = e2eautoscaling.NewDynamicResourceConsumer(name, f.Namespace.Name, kind, scaleTest.initPods, scaleTest.totalInitialCPUUsage, 0, 0, scaleTest.perPodCPURequest, 200, f.ClientSet, f.ScalesGetter)
 	ginkgo.By("After creating rc")
-	defer rc.CleanUp()
-	rc.WaitForReplicas(scaleTest.initPods, timeToWait)
+	time.Sleep(30 * time.Second)
+	ginkgo.By("After sleep 30 seconds")
+	//defer rc.CleanUp()
 	ginkgo.By("CreateCPUHorizontalPodAutoscaler...")
 	hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscaler(rc, scaleTest.targetCPUUtilizationPercent, scaleTest.minPods, scaleTest.maxPods)
 	ginkgo.By("After CreateCPUHorizontalPodAutoscaler...")
-	defer e2eautoscaling.DeleteHorizontalPodAutoscaler(rc, hpa.Name)
+	//defer e2eautoscaling.DeleteHorizontalPodAutoscaler(rc, hpa.Name)
 
 	ginkgo.By("WaitForReplicas first scale ... 15 mins")
 	rc.WaitForReplicas(scaleTest.firstScale, timeToWait)
