@@ -72,7 +72,7 @@ var _ = SIGDescribe("[Feature:HPA] Horizontal pod autoscaling (scale resource: C
 				initPods:                    1,
 				totalInitialCPUUsage:        150,
 				perPodCPURequest:            200,
-				targetCPUUtilizationPercent: 20,
+				targetCPUUtilizationPercent: 50,
 				minPods:                     1,
 				maxPods:                     2,
 				firstScale:                  2,
