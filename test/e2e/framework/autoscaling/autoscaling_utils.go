@@ -44,7 +44,7 @@ import (
 )
 
 const (
-	dynamicConsumptionTimeInSeconds = 30
+	dynamicConsumptionTimeInSeconds = 50
 	dynamicRequestSizeInMillicores  = 100
 	dynamicRequestSizeInMegabytes   = 100
 	dynamicRequestSizeCustomMetric  = 10
