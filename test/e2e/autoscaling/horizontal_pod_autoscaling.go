@@ -70,14 +70,14 @@ var _ = SIGDescribe("[Feature:HPA] Horizontal pod autoscaling (scale resource: C
 		ginkgo.It("Should scale from 1 pod to 2 pods", func() {			
 			scaleTest := &HPAScaleTest{
 				initPods:                    1,
-				totalInitialCPUUsage:        150,
-				perPodCPURequest:            200,
-				targetCPUUtilizationPercent: 50,
+				totalInitialCPUUsage:        250,
+				perPodCPURequest:            500,
+				targetCPUUtilizationPercent: 20,
 				minPods:                     1,
 				maxPods:                     2,
 				firstScale:                  2,
 			}
-			scaleTest.run("rc-light", e2eautoscaling.KindDeployment, rc, f)
+			scaleTest.run("rc-light", e2eautoscaling.KindRC, rc, f)
 		})
 		ginkgo.It("Should scale from 2 pods to 1 pod [Slow]", func() {
 			scaleTest := &HPAScaleTest{
