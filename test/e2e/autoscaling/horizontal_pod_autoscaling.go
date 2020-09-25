@@ -115,13 +115,14 @@ type HPAScaleTest struct {
 // The second state change (optional) is due to the CPU burst parameter, which HPA again responds to.
 // TODO The use of 3 states is arbitrary, we could eventually make this test handle "n" states once this test stabilizes.
 func (scaleTest *HPAScaleTest) run(name string, kind schema.GroupVersionKind, rc *e2eautoscaling.ResourceConsumer, f *framework.Framework) {
-	const timeToWait = 15 * time.Minute
+	const timeToWait = 15 * time.Minute	
 	rc = e2eautoscaling.NewDynamicResourceConsumer(name, f.Namespace.Name, kind, scaleTest.initPods, scaleTest.totalInitialCPUUsage, 0, 0, scaleTest.perPodCPURequest, 200, f.ClientSet, f.ScalesGetter)
 	framework.Logf("After creating rc. sleep 30 seconds")
-	time.Sleep(30 * time.Second)
-	framework.Logf("After sleep 30 seconds")
+	time.Sleep(90 * time.Second)
+	framework.Logf("After sleep 90 seconds")
 	defer rc.CleanUp()
 	framework.Logf("CreateCPUHorizontalPodAutoscaler...")
+	framework.Logf("targetCPUUtilizationPercent: %d", scaleTest.targetCPUUtilizationPercent)
 	hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscaler(rc, scaleTest.targetCPUUtilizationPercent, scaleTest.minPods, scaleTest.maxPods)
 	framework.Logf("After CreateCPUHorizontalPodAutoscaler...")
 	defer e2eautoscaling.DeleteHorizontalPodAutoscaler(rc, hpa.Name)
