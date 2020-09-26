@@ -67,7 +67,7 @@ var _ = SIGDescribe("[Feature:HPA] Horizontal pod autoscaling (scale resource: C
 	})
 
 	SIGDescribe("ReplicationController light", func() {
-		ginkgo.It("Should scale from 1 pod to 2 pods", func() {			
+		ginkgo.It("Should scale from 1 pod to 2 pods", func() {
 			scaleTest := &HPAScaleTest{
 				initPods:                    1,
 				totalInitialCPUUsage:        150,
@@ -115,19 +115,12 @@ type HPAScaleTest struct {
 // The second state change (optional) is due to the CPU burst parameter, which HPA again responds to.
 // TODO The use of 3 states is arbitrary, we could eventually make this test handle "n" states once this test stabilizes.
 func (scaleTest *HPAScaleTest) run(name string, kind schema.GroupVersionKind, rc *e2eautoscaling.ResourceConsumer, f *framework.Framework) {
-	const timeToWait = 15 * time.Minute	
+	const timeToWait = 15 * time.Minute
 	rc = e2eautoscaling.NewDynamicResourceConsumer(name, f.Namespace.Name, kind, scaleTest.initPods, scaleTest.totalInitialCPUUsage, 0, 0, scaleTest.perPodCPURequest, 200, f.ClientSet, f.ScalesGetter)
-	framework.Logf("After creating rc. sleep 90 seconds")
-	time.Sleep(90 * time.Second)
-	framework.Logf("After sleep 90 seconds")
 	defer rc.CleanUp()
-	framework.Logf("CreateCPUHorizontalPodAutoscaler...")
-	framework.Logf("targetCPUUtilizationPercent: %d", scaleTest.targetCPUUtilizationPercent)
 	hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscaler(rc, scaleTest.targetCPUUtilizationPercent, scaleTest.minPods, scaleTest.maxPods)
-	framework.Logf("After CreateCPUHorizontalPodAutoscaler...")
 	defer e2eautoscaling.DeleteHorizontalPodAutoscaler(rc, hpa.Name)
 
-	framework.Logf("WaitForReplicas first scale ... 15 mins")
 	rc.WaitForReplicas(scaleTest.firstScale, timeToWait)
 	if scaleTest.firstScaleStasis > 0 {
 		rc.EnsureDesiredReplicasInRange(scaleTest.firstScale, scaleTest.firstScale+1, scaleTest.firstScaleStasis, hpa.Name)
