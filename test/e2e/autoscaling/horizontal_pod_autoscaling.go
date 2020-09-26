@@ -72,7 +72,7 @@ var _ = SIGDescribe("[Feature:HPA] Horizontal pod autoscaling (scale resource: C
 				initPods:                    1,
 				totalInitialCPUUsage:        150,
 				perPodCPURequest:            200,
-				targetCPUUtilizationPercent: 50,
+				targetCPUUtilizationPercent: 45,
 				minPods:                     1,
 				maxPods:                     2,
 				firstScale:                  2,
@@ -117,7 +117,7 @@ type HPAScaleTest struct {
 func (scaleTest *HPAScaleTest) run(name string, kind schema.GroupVersionKind, rc *e2eautoscaling.ResourceConsumer, f *framework.Framework) {
 	const timeToWait = 15 * time.Minute	
 	rc = e2eautoscaling.NewDynamicResourceConsumer(name, f.Namespace.Name, kind, scaleTest.initPods, scaleTest.totalInitialCPUUsage, 0, 0, scaleTest.perPodCPURequest, 200, f.ClientSet, f.ScalesGetter)
-	framework.Logf("After creating rc. sleep 30 seconds")
+	framework.Logf("After creating rc. sleep 90 seconds")
 	time.Sleep(90 * time.Second)
 	framework.Logf("After sleep 90 seconds")
 	defer rc.CleanUp()
