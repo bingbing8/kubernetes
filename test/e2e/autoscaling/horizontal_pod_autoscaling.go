@@ -118,6 +118,7 @@ func (scaleTest *HPAScaleTest) run(name string, kind schema.GroupVersionKind, rc
 	const timeToWait = 15 * time.Minute
 	rc = e2eautoscaling.NewDynamicResourceConsumer(name, f.Namespace.Name, kind, scaleTest.initPods, scaleTest.totalInitialCPUUsage, 0, 0, scaleTest.perPodCPURequest, 200, f.ClientSet, f.ScalesGetter)
 	defer rc.CleanUp()
+	framework.Logf("CreateCPUHorizontalPodAutoscaler...")
 	hpa := e2eautoscaling.CreateCPUHorizontalPodAutoscaler(rc, scaleTest.targetCPUUtilizationPercent, scaleTest.minPods, scaleTest.maxPods)
 	defer e2eautoscaling.DeleteHorizontalPodAutoscaler(rc, hpa.Name)
 
