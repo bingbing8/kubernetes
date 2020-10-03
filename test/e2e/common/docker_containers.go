@@ -17,6 +17,7 @@ limitations under the License.
 package common
 
 import (
+	"fmt"
 	"github.com/onsi/gomega"
 
 	v1 "k8s.io/api/core/v1"
@@ -41,7 +42,12 @@ var _ = framework.KubeDescribe("Docker Containers", func() {
 		framework.ExpectNoError(err, "Expected pod %q to be running, got error: %v", pod.Name, err)
 
 		pollLogs := func() (string, error) {
-			return e2epod.GetPodLogs(f.ClientSet, f.Namespace.Name, pod.Name, containerName)
+			log, err := e2epod.GetPodLogs(f.ClientSet, f.Namespace.Name, pod.Name, containerName)
+			framework.Logf("log: %v", log)
+			if err != nil {
+				fmt.Println("error: %v", err)
+			}			
+			return log, err
 		}
 
 		// The agnhost's image default entrypoint / args are: "/agnhost pause"
